@@ -68,6 +68,7 @@ func decodeList(bencodedString string) (res []interface{}, length int, err error
 	return nil, 0, fmt.Errorf("List missing ending character")
 }
 
+// Make this private and decode into structs
 func Decode(bencodedString string) (interface{}, int, error) {
 	if unicode.IsDigit(rune(bencodedString[0])) {
 		return decodeString(bencodedString)

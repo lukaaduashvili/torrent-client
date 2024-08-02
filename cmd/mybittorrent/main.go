@@ -34,7 +34,7 @@ func main() {
 		jsonOutput, _ := json.Marshal(decoded)
 		torrent := TorrentFile{}
 
-		err = json.Unmarcshal(jsonOutput, &torrent)
+		err = json.Unmarshal(jsonOutput, &torrent)
 		if err != nil {
 			fmt.Println(err)
 			return

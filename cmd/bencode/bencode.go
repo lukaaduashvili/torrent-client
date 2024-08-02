@@ -48,6 +48,9 @@ func decodeList(bencodedString string) (res []interface{}, length int, err error
 	result := make([]interface{}, 0)
 
 	for i := 1; i < len(bencodedString); {
+		if bencodedString[i] == 'e' {
+			return result, i + 1, nil
+		}
 		val, length, err := Decode(bencodedString[i:])
 		if err != nil {
 			return nil, 0, err
@@ -59,9 +62,6 @@ func decodeList(bencodedString string) (res []interface{}, length int, err error
 
 		if i >= len(bencodedString) {
 			return nil, 0, fmt.Errorf("List decoding out of bounds")
-		}
-		if bencodedString[i] == 'e' {
-			return result, i, nil
 		}
 	}
 

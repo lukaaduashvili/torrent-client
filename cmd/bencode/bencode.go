@@ -2,6 +2,7 @@ package bencode
 
 import (
 	"fmt"
+	"reflect"
 	"strconv"
 	"unicode"
 )
@@ -68,15 +69,50 @@ func decodeList(bencodedString string) (res []interface{}, length int, err error
 	return nil, 0, fmt.Errorf("List missing ending character")
 }
 
+func decodeDict(bencodedString string) (res map[string]interface{}, length int, err error) {
+	result := make(map[string]interface{})
+
+	for i := 1; i < len(bencodedString); {
+		if bencodedString[i] == 'e' {
+			return result, i + 1, nil
+		}
+
+		key, length, err := Decode(bencodedString[i:])
+		if err != nil {
+			return nil, 0, err
+		}
+		if reflect.TypeOf(key).String() != "string" {
+			return nil, 0, fmt.Errorf("Dictionay key must be a string")
+		}
+
+		i += length
+
+		val, length, err := Decode(bencodedString[i:])
+
+		if err != nil {
+			return nil, 0, err
+		}
+
+		result[key.(string)] = val
+
+		i += length
+	}
+
+	return nil, 0, fmt.Errorf("Dict missing ending character")
+}
+
 // Make this private and decode into structs
 func Decode(bencodedString string) (interface{}, int, error) {
+
 	if unicode.IsDigit(rune(bencodedString[0])) {
 		return decodeString(bencodedString)
 	} else if bencodedString[0] == 'i' {
 		return decodeInt(bencodedString)
 	} else if bencodedString[0] == 'l' {
 		return decodeList(bencodedString)
+	} else if bencodedString[0] == 'd' {
+		return decodeDict(bencodedString)
 	} else {
-		return "", 0, fmt.Errorf("only strings are supported at the moment")
+		return "", 0, fmt.Errorf("Cannot decode unsupported type %s", bencodedString[0])
 	}
 }

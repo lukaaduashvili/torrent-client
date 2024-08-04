@@ -1,4 +1,4 @@
-package main
+package torrentfile
 
 import (
 	"bytes"
@@ -109,6 +109,7 @@ func (torrent *TorrentFile) ToString() string {
 	res += fmt.Sprintf("Info Hash: %x\n", torrent.InfoHash)
 	res += fmt.Sprintf("Piece Length: %d\n", torrent.Info.PieceLength)
 	res += fmt.Sprintf("Piece Hashes:\n")
+
 	for _, value := range torrent.PieceHashes {
 		res += fmt.Sprintf("%x\n", value)
 	}

@@ -6,6 +6,7 @@ import (
 	"github.com/codecrafters-io/bittorrent-starter-go/cmd/torrentfile"
 	"github.com/jackpal/bencode-go"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -77,4 +78,36 @@ func (resource *TrackerResource) GetPeers() {
 		currPeer += strconv.Itoa(int(binary.BigEndian.Uint16(encodedPeers[i+4 : i+6])))
 		resource.Peers = append(resource.Peers, currPeer)
 	}
+}
+
+func (resource *TrackerResource) InitiateHandshake(peer string) {
+	handshake := make([]byte, 68)
+
+	handshake[0] = byte(19)
+	copy(handshake[1:20], "BitTorrent protocol")
+	copy(handshake[28:48], resource.file.InfoHash[:])
+	copy(handshake[48:68], resource.peerId)
+
+	conn, err := net.Dial("tcp", peer)
+	if err != nil {
+		fmt.Println("Error connecting:", err)
+		os.Exit(1)
+	}
+	defer conn.Close()
+
+	// Send the byte array
+	_, err = conn.Write(handshake)
+	if err != nil {
+		fmt.Println("Error sending data:", err)
+		os.Exit(1)
+	}
+
+	buffer := make([]byte, 1024)
+
+	_, err = conn.Read(buffer)
+	if err != nil {
+		return
+	}
+
+	fmt.Printf("Peer ID: %x\n", buffer[48:68])
 }

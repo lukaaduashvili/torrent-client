@@ -62,6 +62,28 @@ func main() {
 		for _, peerAddress := range peerResource.Peers {
 			fmt.Printf("%s\n", peerAddress)
 		}
+	} else if command == "handshake" {
+		dat, err := os.ReadFile(os.Args[2])
+
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		torrent, err := torrentfile.NewTorrentFile(dat)
+
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		peerResource := peer.NewTrackerResource(*torrent)
+
+		//peerResource.GetPeers()
+
+		peerAddress := os.Args[3]
+
+		peerResource.InitiateHandshake(peerAddress)
 	} else {
 		fmt.Println("Unknown command: " + command)
 		os.Exit(1)

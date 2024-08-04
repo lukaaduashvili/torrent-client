@@ -3,18 +3,18 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/codecrafters-io/bittorrent-starter-go/cmd/bencode"
+	bencode "github.com/jackpal/bencode-go" // Available if you need it!
 	"os"
-	// bencode "github.com/jackpal/bencode-go" // Available if you need it!
+	"strings"
 )
 
 func main() {
 	command := os.Args[1]
 
 	if command == "decode" {
-		bencodedValue := os.Args[2]
+		bencodedValue := strings.NewReader(os.Args[2])
 
-		decoded, _, err := bencode.Decode(bencodedValue)
+		decoded, err := bencode.Decode(bencodedValue)
 		if err != nil {
 			fmt.Println(err)
 			return
@@ -25,16 +25,13 @@ func main() {
 	} else if command == "info" {
 		dat, err := os.ReadFile(os.Args[2])
 
-		decoded, _, err := bencode.Decode(string(dat))
 		if err != nil {
 			fmt.Println(err)
 			return
 		}
 
-		jsonOutput, _ := json.Marshal(decoded)
-		torrent := TorrentFile{}
+		torrent, err := NewTorrentFile(dat)
 
-		err = json.Unmarshal(jsonOutput, &torrent)
 		if err != nil {
 			fmt.Println(err)
 			return
@@ -42,6 +39,7 @@ func main() {
 
 		fmt.Printf("Tracker URL: %s\n", torrent.Announce)
 		fmt.Printf("Length: %d\n", torrent.Info.Length)
+		fmt.Printf("Info Hash: %x\n", torrent.InfoHash)
 	} else {
 		fmt.Println("Unknown command: " + command)
 		os.Exit(1)

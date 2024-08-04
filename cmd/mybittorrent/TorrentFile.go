@@ -8,12 +8,25 @@ import (
 )
 
 type TorrentFile struct {
-	Announce string     `bencode:"announce"`
-	Info     InfoStruct `bencode:"info"`
-	InfoHash [20]byte
+	Announce    string
+	Info        InfoStruct
+	InfoHash    [20]byte
+	PieceHashes [][20]byte
 }
 
 type InfoStruct struct {
+	Length      int
+	Name        string
+	PieceLength int
+	Pieces      string
+}
+
+type encodedTorrentFile struct {
+	Announce string            `bencode:"announce"`
+	Info     encodedInfoStruct `bencode:"info"`
+}
+
+type encodedInfoStruct struct {
 	Length      int    `bencode:"length"`
 	Name        string `bencode:"name"`
 	PieceLength int    `bencode:"piece length"`
@@ -22,29 +35,83 @@ type InfoStruct struct {
 
 func NewTorrentFile(data []byte) (*TorrentFile, error) {
 	torrent := TorrentFile{}
+	encodedFile := encodedTorrentFile{}
 
-	err := bencode.Unmarshal(bytes.NewReader(data), &torrent)
+	err := bencode.Unmarshal(bytes.NewReader(data), &encodedFile)
 
 	if err != nil {
 		return nil, err
 	}
 
-	torrent.setInfoMD1Hash()
+	infoFile := InfoStruct{}
+	infoFile.Length = encodedFile.Info.Length
+	infoFile.Name = encodedFile.Info.Name
+	infoFile.Pieces = encodedFile.Info.Pieces
+	infoFile.PieceLength = encodedFile.Info.PieceLength
+
+	torrent.Announce = encodedFile.Announce
+	torrent.Info = infoFile
+
+	torrent.InfoHash, err = getInfoMD1Hash(encodedFile.Info)
+
+	if err != nil {
+		return nil, err
+	}
+
+	torrent.PieceHashes, err = setPieceHashes(encodedFile.Info)
+
+	if err != nil {
+		return nil, err
+	}
 
 	return &torrent, nil
 }
 
-func (torrent *TorrentFile) setInfoMD1Hash() {
-	var buf bytes.Buffer
-	info := torrent.Info
-	err := bencode.Marshal(&buf, info)
+func getInfoMD1Hash(encodedInfoStruct encodedInfoStruct) ([20]byte, error) {
+	sha := sha1.New()
+	err := bencode.Marshal(sha, encodedInfoStruct)
+	var hash [20]byte
 
 	if err != nil {
-		fmt.Println(err)
-		return
+		return hash, err
 	}
 
-	h := sha1.Sum(buf.Bytes())
+	h := sha.Sum(nil)
 
-	torrent.InfoHash = h
+	copy(hash[:], h[:20])
+
+	return hash, nil
+}
+
+func setPieceHashes(encodedInfoStruct encodedInfoStruct) ([][20]byte, error) {
+	hashLen := 20 // Length of SHA-1 hash
+	buf := []byte(encodedInfoStruct.Pieces)
+
+	numHashes := len(buf) / hashLen
+	hashes := make([][20]byte, numHashes)
+
+	if len(buf)%hashLen != 0 {
+		err := fmt.Errorf("Received malformed pieces of length %d", len(buf))
+		return hashes, err
+	}
+
+	for i := 0; i < numHashes; i++ {
+		copy(hashes[i][:], buf[i*hashLen:(i+1)*hashLen])
+	}
+
+	return hashes, nil
+}
+
+func (torrent *TorrentFile) ToString() string {
+	res := ""
+	res += fmt.Sprintf("Tracker URL: %s\n", torrent.Announce)
+	res += fmt.Sprintf("Length: %d\n", torrent.Info.Length)
+	res += fmt.Sprintf("Info Hash: %x\n", torrent.InfoHash)
+	res += fmt.Sprintf("Piece Length: %d\n", torrent.Info.PieceLength)
+	res += fmt.Sprintf("Piece Hashes:\n")
+	for _, value := range torrent.PieceHashes {
+		res += fmt.Sprintf("%x\n", value)
+	}
+
+	return res
 }

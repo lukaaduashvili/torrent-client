@@ -37,9 +37,7 @@ func main() {
 			return
 		}
 
-		fmt.Printf("Tracker URL: %s\n", torrent.Announce)
-		fmt.Printf("Length: %d\n", torrent.Info.Length)
-		fmt.Printf("Info Hash: %x\n", torrent.InfoHash)
+		fmt.Printf(torrent.ToString())
 	} else {
 		fmt.Println("Unknown command: " + command)
 		os.Exit(1)

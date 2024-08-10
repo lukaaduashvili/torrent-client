@@ -7,6 +7,7 @@ import (
 	"github.com/codecrafters-io/bittorrent-starter-go/cmd/torrentfile"
 	bencode "github.com/jackpal/bencode-go" // Available if you need it!
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -84,6 +85,53 @@ func main() {
 		peerAddress := os.Args[3]
 
 		peerResource.InitiateHandshake(peerAddress)
+	} else if command == "download_piece" {
+
+		var torrentFile, outputPath string
+
+		if os.Args[2] == "-o" {
+			torrentFile = os.Args[4]
+			outputPath = os.Args[3]
+		} else {
+			torrentFile = os.Args[3]
+			outputPath = "."
+		}
+
+		dat, err := os.ReadFile(torrentFile)
+
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		torrent, err := torrentfile.NewTorrentFile(dat)
+
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		peerResource := peer.NewTrackerResource(*torrent)
+
+		peerResource.GetPeers()
+
+		peerResource.InitiateHandshake(peerResource.Peers[0])
+
+		ind, _ := strconv.Atoi(os.Args[5])
+		data := peerResource.DownloadChunk(peerResource.Peers[0], ind)
+
+		file, err := os.Create(outputPath)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		defer file.Close()
+		_, err = file.Write(data)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		fmt.Printf("Piece downloaded to %s.\n", outputPath)
 	} else {
 		fmt.Println("Unknown command: " + command)
 		os.Exit(1)

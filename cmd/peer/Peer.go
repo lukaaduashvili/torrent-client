@@ -14,6 +14,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type TrackerResource struct {
@@ -101,24 +102,15 @@ func (resource *TrackerResource) GetPeers() {
 	}
 }
 
-func (resource *TrackerResource) InitiateHandshake(peer string) error {
-	conn, err := resource.getConnection(peer)
-
-	if err != nil {
-		return err
-	}
-
+func (resource *TrackerResource) InitiateHandshake(conn net.Conn, peer string) error {
 	var handshake []byte
 	handshake = append(handshake, byte(19))
 	handshake = append(handshake, []byte("BitTorrent protocol")...)
 	handshake = append(handshake, []byte{0, 0, 0, 0, 0, 0, 0, 0}...)
 	handshake = append(handshake, resource.file.InfoHash[:]...)
 	handshake = append(handshake, resource.peerId...)
-
-	fmt.Printf("%x\n", handshake)
-
 	// Send the byte array
-	_, err = conn.Write(handshake)
+	_, err := conn.Write(handshake)
 	if err != nil {
 		return fmt.Errorf("Error sending data: %s", err.Error())
 	}
@@ -131,52 +123,15 @@ func (resource *TrackerResource) InitiateHandshake(peer string) error {
 	}
 
 	fmt.Printf("Peer ID: %x\n", buffer[48:68])
+
 	return nil
 }
 
-func (resource *TrackerResource) InitHandshake(peer string) error {
-	conn, err := net.Dial("tcp", peer)
-
-	if err != nil {
-		return err
-	}
-
-	var handshake []byte
-	handshake = append(handshake, byte(19))
-	handshake = append(handshake, []byte("BitTorrent protocol")...)
-	handshake = append(handshake, []byte{0, 0, 0, 0, 0, 0, 0, 0}...)
-	handshake = append(handshake, resource.file.InfoHash[:]...)
-	handshake = append(handshake, resource.peerId...)
-
-	fmt.Printf("%x\n", handshake)
-
-	// Send the byte array
-	_, err = conn.Write(handshake)
-	if err != nil {
-		return fmt.Errorf("Error sending data: %s", err.Error())
-	}
-
-	buffer := make([]byte, 1024)
-
-	_, err = conn.Read(buffer)
-	if err != nil {
-		return fmt.Errorf("Error receiving data during handshake: %s", err.Error())
-	}
-
-	fmt.Printf("Peer ID: %x\n", buffer[48:68])
-	return nil
-}
-
-func (resource *TrackerResource) DownloadChunk(peer string, pieceIndex int) []byte {
-	conn, err := resource.getConnection(peer)
-
-	if err != nil {
-		fmt.Println(err)
-		return nil
-	}
+func (resource *TrackerResource) DownloadChunk(conn net.Conn, peer string, pieceIndex int) []byte {
+	defer conn.Close()
 
 	buf := make([]byte, 4)
-	_, err = conn.Read(buf)
+	_, err := conn.Read(buf)
 
 	if err != nil {
 		fmt.Println(err)
@@ -189,10 +144,17 @@ func (resource *TrackerResource) DownloadChunk(peer string, pieceIndex int) []by
 
 	payloadBuf := make([]byte, peerMessage.lengthPrefix)
 	_, err = conn.Read(payloadBuf)
+
 	if err != nil {
 		fmt.Println(err)
 		return nil
 	}
+
+	if len(payloadBuf) < 1 {
+		fmt.Println("Invalid payload")
+		return nil
+	}
+
 	peerMessage.id = payloadBuf[0]
 
 	if peerMessage.id != 5 {
@@ -267,7 +229,6 @@ func (resource *TrackerResource) DownloadChunk(peer string, pieceIndex int) []by
 			fmt.Println(err)
 			return nil
 		}
-		fmt.Println("Sent request message", peerMessage)
 
 		resultPrefix := make([]byte, 4)
 		_, err = conn.Read(resultPrefix)
@@ -293,17 +254,37 @@ func (resource *TrackerResource) DownloadChunk(peer string, pieceIndex int) []by
 	return fileData
 }
 
-func (resource *TrackerResource) getConnection(peer string) (net.Conn, error) {
-	if connection, ok := resource.PeerConnections[peer]; ok {
-		if connection == nil {
-			connection, err := net.Dial("tcp", peer)
+func (resource *TrackerResource) DownloadFile() ([]byte, error) {
+	var fileData []byte
+
+	pieceSize := resource.file.Info.PieceLength
+	numPieces := int(math.Ceil(float64(resource.file.Info.Length) / float64(pieceSize)))
+
+	for pieceNumber := 0; pieceNumber < numPieces; pieceNumber++ {
+		fmt.Printf("Downloading piece number %d\n", pieceNumber)
+		for _, peerAddress := range resource.Peers {
+			fmt.Printf("Attempting to download from peer %s\n", peerAddress)
+
+			conn, err := net.DialTimeout("tcp", peerAddress, time.Second*1)
+
 			if err != nil {
-				return nil, err
+				fmt.Println(err)
+				continue
 			}
-			resource.PeerConnections[peer] = connection
+
+			err = resource.InitiateHandshake(conn, peerAddress)
+
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
+
+			data := resource.DownloadChunk(conn, peerAddress, pieceNumber)
+			if len(data) != 0 {
+				fileData = append(fileData, data...)
+				break
+			}
 		}
-		return resource.PeerConnections[peer], nil
-	} else {
-		return nil, fmt.Errorf("Peer %s is not in list of peers \n", peer)
 	}
+	return fileData, nil
 }

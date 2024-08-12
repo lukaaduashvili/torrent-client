@@ -47,7 +47,7 @@ type Message struct {
 func NewTrackerResource(file torrentfile.TorrentFile) *TrackerResource {
 	resource := TrackerResource{}
 	resource.file = file
-	resource.peerId = randSeq(20)
+	resource.peerId = "00112233445566778899"
 	resource.port = 6881
 	resource.uploaded = 0
 	resource.downloaded = 0
@@ -101,12 +101,11 @@ func (resource *TrackerResource) GetPeers() {
 	}
 }
 
-func (resource *TrackerResource) InitiateHandshake(peer string) {
+func (resource *TrackerResource) InitiateHandshake(peer string) error {
 	conn, err := resource.getConnection(peer)
 
 	if err != nil {
-		fmt.Println(err)
-		return
+		return err
 	}
 
 	var handshake []byte
@@ -116,22 +115,56 @@ func (resource *TrackerResource) InitiateHandshake(peer string) {
 	handshake = append(handshake, resource.file.InfoHash[:]...)
 	handshake = append(handshake, resource.peerId...)
 
+	fmt.Printf("%x\n", handshake)
+
 	// Send the byte array
 	_, err = conn.Write(handshake)
 	if err != nil {
-		fmt.Println("Error sending data:", err)
-		return
+		return fmt.Errorf("Error sending data: %s", err.Error())
 	}
 
 	buffer := make([]byte, 1024)
 
 	_, err = conn.Read(buffer)
 	if err != nil {
-		fmt.Println("Error receiving data:", err)
-		return
+		return fmt.Errorf("Error receiving data during handshake: %s", err.Error())
 	}
 
 	fmt.Printf("Peer ID: %x\n", buffer[48:68])
+	return nil
+}
+
+func (resource *TrackerResource) InitHandshake(peer string) error {
+	conn, err := net.Dial("tcp", peer)
+
+	if err != nil {
+		return err
+	}
+
+	var handshake []byte
+	handshake = append(handshake, byte(19))
+	handshake = append(handshake, []byte("BitTorrent protocol")...)
+	handshake = append(handshake, []byte{0, 0, 0, 0, 0, 0, 0, 0}...)
+	handshake = append(handshake, resource.file.InfoHash[:]...)
+	handshake = append(handshake, resource.peerId...)
+
+	fmt.Printf("%x\n", handshake)
+
+	// Send the byte array
+	_, err = conn.Write(handshake)
+	if err != nil {
+		return fmt.Errorf("Error sending data: %s", err.Error())
+	}
+
+	buffer := make([]byte, 1024)
+
+	_, err = conn.Read(buffer)
+	if err != nil {
+		return fmt.Errorf("Error receiving data during handshake: %s", err.Error())
+	}
+
+	fmt.Printf("Peer ID: %x\n", buffer[48:68])
+	return nil
 }
 
 func (resource *TrackerResource) DownloadChunk(peer string, pieceIndex int) []byte {
@@ -273,6 +306,4 @@ func (resource *TrackerResource) getConnection(peer string) (net.Conn, error) {
 	} else {
 		return nil, fmt.Errorf("Peer %s is not in list of peers \n", peer)
 	}
-
-	return nil, fmt.Errorf("Error loading connection for peer %s \n", peer)
 }

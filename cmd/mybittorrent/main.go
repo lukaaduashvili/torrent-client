@@ -84,7 +84,11 @@ func main() {
 
 		peerAddress := os.Args[3]
 
-		peerResource.InitiateHandshake(peerAddress)
+		err = peerResource.InitHandshake(peerAddress)
+
+		if err != nil {
+			fmt.Println(err)
+		}
 	} else if command == "download_piece" {
 
 		var torrentFile, outputPath string
@@ -115,16 +119,35 @@ func main() {
 
 		peerResource.GetPeers()
 
-		peerResource.InitiateHandshake(peerResource.Peers[0])
+		var data []byte
 
-		ind, _ := strconv.Atoi(os.Args[5])
-		data := peerResource.DownloadChunk(peerResource.Peers[0], ind)
+		for _, peerAddress := range peerResource.Peers {
+			err = peerResource.InitiateHandshake(peerAddress)
+
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
+
+			ind, _ := strconv.Atoi(os.Args[5])
+			data = peerResource.DownloadChunk(peerAddress, ind)
+			if len(data) != 0 {
+				break
+			}
+		}
+
+		if len(data) == 0 {
+			fmt.Println("Could not download data")
+			return
+		}
 
 		file, err := os.Create(outputPath)
+
 		if err != nil {
 			fmt.Println(err)
 			return
 		}
+
 		defer file.Close()
 		_, err = file.Write(data)
 		if err != nil {
